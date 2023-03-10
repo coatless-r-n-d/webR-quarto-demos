@@ -2,7 +2,7 @@
 
 This repository houses experiments with generating a standalone [Quarto Document](https://quarto.org/) using [WebR](https://docs.r-wasm.org/webr/latest/).
 
-- [Quarto HTML Document with WebR](webr-quarto-html-demo.qmd)
+- [Quarto HTML Document with WebR](https://rd.thecoatlessprofessor.com/webR-quarto-demos/webr-quarto-html-demo.html) ([Source](webr-quarto-html-demo.qmd))
 
 ## Background
 
