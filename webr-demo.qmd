@@ -1,0 +1,320 @@
+---
+title: "webR with Quarto HTML Standalone Document Proof of Concept"
+subtitle: "Experiments with an Interactive Quarto Document using webR v0.1.0"
+author: "JJB leaning heavily on webR authors"
+engine: knitr
+execute:
+  echo: true
+  error: true
+embed-resources: true
+format:
+    html: 
+      toc: true
+editor: source
+---
+
+# Demo
+
+## Background
+
+The purpose of this document is to explore how WebR can be embedded in a 
+Quarto Document for the purposes of teaching _R_. 
+
+- WebR Website: <https://docs.r-wasm.org/webr/latest/>
+- WebR GitHub: <https://github.com/r-wasm/webr/>
+
+## Setup 
+
+See the <https://github.com/coatless-r-n-d/webR-quarto-demos> for source.
+
+```{=html}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
+<style>
+  .CodeMirror pre {
+    background-color: unset !important;
+  }
+  .btn-webr {
+    background-color: #EEEEEE;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/r/r.js"></script>
+<script type="module">
+  import { WebR } from "https://webr.r-wasm.org/v0.1.0/webr.mjs";
+  globalThis.webR = new WebR({
+    SW_URL: "/"
+  });
+  await globalThis.webR.init();
+  globalThis.webRCodeShelter = await new globalThis.webR.Shelter();
+  document.querySelectorAll(".btn-webr").forEach((btn) => {
+    btn.innerText = "Run code";
+    btn.disabled = false;
+  });
+</script>
+```
+
+```{r}
+#| results: asis
+#| echo: false
+webr_counter = 0
+
+cat("importScripts('https://webr.r-wasm.org/v0.1.0/webr-worker.js');", file = "webr-worker.js")
+cat("importScripts('https://webr.r-wasm.org/v0.1.0/webr-serviceworker.js');", file = "webr-serviceworker.js")
+
+webr_editor = function(code = I(encodeString(code, quote = '`')), width, height) { 
+webr_counter <<- webr_counter + 1
+
+output = glue::glue('
+<button class="btn btn-default btn-webr" disabled type="button"  id="webr-run-button-{{ webr_counter }}">Loading webR...</button>
+<div id="webr-editor-{{ webr_counter }}"></div>
+<div id="webr-code-output-{{ webr_counter }}"><pre style="visibility: hidden"></pre></div>
+<script type="module">
+  const runButton = document.getElementById("webr-run-button-{{ webr_counter }}");
+  const outputDiv = document.getElementById("webr-code-output-{{ webr_counter }}");
+  const editorDiv = document.getElementById("webr-editor-{{ webr_counter }}");
+
+  const editor = CodeMirror((elt) => {
+    elt.style.border = "1px solid #eee";
+    elt.style.height = "auto";
+    editorDiv.append(elt);
+  },{
+    value: {{code}},
+    lineNumbers: true,
+    mode: "r",
+    theme: "light default",
+    viewportMargin: Infinity,
+  });
+
+  runButton.onclick = async () => {
+    runButton.disabled = true;
+    let canvas = undefined;
+    await globalThis.webR.init();
+    await webR.evalRVoid("canvas(width={{width}}, height={{height}})");
+    const result = await webRCodeShelter.captureR(editor.getValue(), {
+      withAutoprint: true,
+      captureStreams: true,
+      captureConditions: false,
+      env: webR.objs.emptyEnv,
+    });
+    try {
+      await webR.evalRVoid("dev.off()");
+      const out = result.output.filter(
+        evt => evt.type == "stdout" || evt.type == "stderr"
+      ).map((evt) => evt.data).join("\\n");
+
+      const msgs = await webR.flush();
+      msgs.forEach(msg => {
+        if (msg.type === "canvasExec"){
+          if (!canvas) {
+            canvas = document.createElement("canvas");
+            canvas.setAttribute("width", 2 * {{width}});
+            canvas.setAttribute("height", 2 * {{height}});
+            canvas.style.width="700px";
+            canvas.style.display="block";
+            canvas.style.margin="auto";
+          }
+          Function(`this.getContext("2d").${msg.data}`).bind(canvas)();
+        }
+      });
+
+      outputDiv.innerHTML = "";
+      const pre = document.createElement("pre");
+      if (/\\S/.test(out)) {
+        const code = document.createElement("code");
+        code.innerText = out;
+        pre.appendChild(code);
+      } else {
+        pre.style.visibility = "hidden";
+      }
+      outputDiv.appendChild(pre);
+
+      if (canvas) {
+        const p = document.createElement("p");
+        p.appendChild(canvas);
+        outputDiv.appendChild(p);
+      }
+    } finally {
+      webRCodeShelter.purge();
+      runButton.disabled = false;
+    }
+  }
+
+  await globalThis.webR.init();
+  runButton.innerText = "Run code";
+  runButton.disabled = false;
+</script>
+', .open = "{{", .close = "}}")
+}
+```
+
+```{r}
+#| echo: false
+knitr::knit_engines$set(webr = function(options) {
+  code = paste(options$code, collapse = "\n")
+  w = knitr::opts_current$get('fig.width') * 72
+  h = knitr::opts_current$get('fig.height') * 72
+  options$results = 'asis'
+  
+  form = webr_editor(code = I(encodeString(code, quote = '`')), width = w, height = h)
+  
+  form
+}
+)
+```
+
+## Exploration
+
+Next, let's look at a few features of the language
+
+### Linear Regression
+
+We'll first start with the WebR team's demo example or the statistician way of
+saying, "Hello world!"... Aka linear regression:
+
+```{webr}
+fit = lm(mpg ~ am, data=mtcars)
+summary(fit)
+```
+
+### Retrieving prior objects
+
+Each WebR cell appears to be connected to each other. Thus, we can access the
+`fit` outcome:
+
+```{webr}
+coef(fit)
+```
+
+```{webr}
+anova(fit)
+```
+
+### Mixing active and non-active _R_ code
+
+For _if-else_ statements, we have:
+
+```r
+if (...) {
+  # Statements for TRUE
+} else {
+  # Statements for FALSE
+}
+```
+
+- `...` denotes a condition (either `TRUE` or `FALSE`)
+- If `TRUE`, then run the statements inside `{}`
+- Else, `FALSE`, carry on with your day. 
+
+How could we modify `temperature` to have the `if` statement print `"Hot!"`? 
+
+```{webr}
+# Let's classify 
+temperature = 60
+
+if (temperature > 76) {
+    print("Hot!")
+} else {
+    print("Cold!")
+}
+```
+
+
+### Summarize Data
+
+Glancing at data frames yields: 
+
+```{webr}
+summary(mtcars)
+```
+
+### Errors and Warnings
+
+
+```{webr}
+stop("What happens if an error is present?")
+```
+
+```{webr}
+warning("You shouldn't be here...")
+```
+
+
+### Base graphics
+
+Graphing with base R 
+
+```{webr}
+plot(pressure)
+```
+
+More advanced base R graphing... 
+
+```{webr}
+x1 = seq(0, 1, length = 20)
+y1 = rep(0, 20)
+x2 = rep(0, 20)
+y2 = seq(0.75, 0, length = 20)
+
+plot(0, type = "n",
+     axes = FALSE, ylab = "", xlab = "", 
+     xlim = c(0, 1), ylim = c(0, 0.75), asp = 1,
+     main = "Straight Lines as a Curve")
+
+segments(x1, y1, x2, y2)
+box(col = "grey")
+```
+
+### ggplot2 Graphics
+
+Next, we look at using `ggplot2` graphics. By default, the `ggplot2` package
+is not available as it is _dependency_ heavy. 
+
+```{=html}
+<details>
+<summary>
+Package installation for `ggplot2` given by `webr::install("ggplot2")`
+</summary>
+Downloading webR package: cli
+Downloading webR package: glue
+Downloading webR package: gtable
+Downloading webR package: isoband
+Downloading webR package: rlang
+Downloading webR package: lifecycle
+Downloading webR package: MASS
+Downloading webR package: lattice
+Downloading webR package: nlme
+Downloading webR package: Matrix
+Downloading webR package: mgcv
+Downloading webR package: farver
+Downloading webR package: labeling
+Downloading webR package: colorspace
+Downloading webR package: munsell
+Downloading webR package: R6
+Downloading webR package: RColorBrewer
+Downloading webR package: viridisLite
+Downloading webR package: scales
+Downloading webR package: fansi
+Downloading webR package: magrittr
+Downloading webR package: utf8
+Downloading webR package: vctrs
+Downloading webR package: pillar
+Downloading webR package: pkgconfig
+Downloading webR package: tibble
+Downloading webR package: withr
+Downloading webR package: ggplot2
+</details>
+```
+
+```{webr}
+# Install non-base R packages
+webr::install("ggplot2")
+# Load non-base packages like normal
+library("ggplot2")
+p = ggplot(mpg, aes(class, hwy))
+p + geom_boxplot()
+```
+
+
+
