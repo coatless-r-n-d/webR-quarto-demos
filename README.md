@@ -1,6 +1,9 @@
 # webR-quarto-demos
 
-This repository houses experiments with generating a standalone Quarto Document using [WebR]().
+This repository houses experiments with generating a standalone [Quarto Document](https://quarto.org/) using [WebR](https://docs.r-wasm.org/webr/latest/).
+
+- [Quarto HTML Document with WebR]()
+- [Quarto RevealJS Lecture Slides with WebR]()
 
 ## Background
 
