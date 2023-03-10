@@ -1,15 +1,15 @@
 # webR-quarto-demos
 
-This repository houses experiments with generating a standalone Quarto Document using Web R.
+This repository houses experiments with generating a standalone Quarto Document using [WebR]().
 
 ## Background
 
-[webR v0.1.0](https://twitter.com/gwstagg/status/1633821049329537025) was launched today
+[WebR v0.1.0](https://twitter.com/gwstagg/status/1633821049329537025) was launched on March 9th
 by George Stagg ([georgestagg](https://github.com/georgestagg)) and Lionel Henry ([lionel-](https://github.com/lionel-)). The goal of webR is to: 
 
 > to run R code in the browser without the need for an R server to execute the code
 
-This is _amazing_ advancement of _R_ and has ripple effects with teaching!
+This is _amazing_ advancement of _R_ and has major implications with teaching R to the masses!
 
 ## Acknowledgements
 
